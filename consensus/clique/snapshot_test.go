@@ -419,7 +419,7 @@ func (tt *cliqueTest) run(t *testing.T) {
 	}
 	genesis.Config = &config
 
-	engine := New(config.Clique, rawdb.NewMemoryDatabase())
+	engine := New(config.Clique, nil, rawdb.NewMemoryDatabase())
 	engine.fakeDiff = true
 
 	_, blocks, _ := core.GenerateChainWithGenesis(genesis, engine, len(tt.votes), func(j int, gen *core.BlockGen) {

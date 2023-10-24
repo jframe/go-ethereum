@@ -171,8 +171,9 @@ func ecrecover(header *types.Header, sigcache *sigLRU) (common.Address, error) {
 // Clique is the proof-of-authority consensus engine proposed to support the
 // Ethereum testnet following the Ropsten attacks.
 type Clique struct {
-	config *params.CliqueConfig // Consensus engine configuration parameters
-	db     ethdb.Database       // Database to store and retrieve snapshot checkpoints
+	config      *params.CliqueConfig      // Consensus engine configuration parameters
+	transitions *params.TransitionsConfig // Transition configuration
+	db          ethdb.Database            // Database to store and retrieve snapshot checkpoints
 
 	recents    *lru.Cache[common.Hash, *Snapshot] // Snapshots for recent block to speed up reorgs
 	signatures *sigLRU                            // Signatures of recent blocks to speed up mining
@@ -189,7 +190,7 @@ type Clique struct {
 
 // New creates a Clique proof-of-authority consensus engine with the initial
 // signers set to the ones provided by the user.
-func New(config *params.CliqueConfig, db ethdb.Database) *Clique {
+func New(config *params.CliqueConfig, transitions *params.TransitionsConfig, db ethdb.Database) *Clique {
 	// Set any missing consensus parameters to their defaults
 	conf := *config
 	if conf.Epoch == 0 {
@@ -200,11 +201,12 @@ func New(config *params.CliqueConfig, db ethdb.Database) *Clique {
 	signatures := lru.NewCache[common.Hash, common.Address](inmemorySignatures)
 
 	return &Clique{
-		config:     &conf,
-		db:         db,
-		recents:    recents,
-		signatures: signatures,
-		proposals:  make(map[common.Address]bool),
+		config:      &conf,
+		transitions: transitions,
+		db:          db,
+		recents:     recents,
+		signatures:  signatures,
+		proposals:   make(map[common.Address]bool),
 	}
 }
 
@@ -329,7 +331,7 @@ func (c *Clique) verifyCascadingFields(chain consensus.ChainHeaderReader, header
 	if parent == nil || parent.Number.Uint64() != number-1 || parent.Hash() != header.ParentHash {
 		return consensus.ErrUnknownAncestor
 	}
-	if parent.Time+c.config.Period > header.Time {
+	if parent.Time+c.getBlockPeriod(number-1) > header.Time {
 		return errInvalidTimestamp
 	}
 	// Verify that the gasUsed is <= gasLimit
@@ -558,7 +560,7 @@ func (c *Clique) Prepare(chain consensus.ChainHeaderReader, header *types.Header
 	if parent == nil {
 		return consensus.ErrUnknownAncestor
 	}
-	header.Time = parent.Time + c.config.Period
+	header.Time = parent.Time + c.getBlockPeriod(number-1)
 	if header.Time < uint64(time.Now().Unix()) {
 		header.Time = uint64(time.Now().Unix())
 	}
@@ -755,5 +757,26 @@ func encodeSigHeader(w io.Writer, header *types.Header) {
 	}
 	if err := rlp.Encode(w, enc); err != nil {
 		panic("can't encode: " + err.Error())
+	}
+}
+
+func (c *Clique) getBlockPeriod(blockNumber uint64) uint64 {
+	blockPeriod := c.config.Period
+
+	c.getTransitionValue(blockNumber, func(transition params.CliqueTransitionConfig) {
+		if transition.BlockPeriodSeconds != 0 {
+			blockPeriod = transition.BlockPeriodSeconds
+		}
+	})
+
+	return blockPeriod
+}
+
+func (c *Clique) getTransitionValue(num uint64, callback func(transition params.CliqueTransitionConfig)) {
+	if c != nil && c.transitions != nil {
+		cliqueTransition := c.transitions.CliqueTransition
+		for i := 0; i < len(cliqueTransition) && cliqueTransition[i].Block < num; i++ {
+			callback(cliqueTransition[i])
+		}
 	}
 }

@@ -332,6 +332,8 @@ type ChainConfig struct {
 	Ethash    *EthashConfig `json:"ethash,omitempty"`
 	Clique    *CliqueConfig `json:"clique,omitempty"`
 	IsDevMode bool          `json:"isDev,omitempty"`
+
+	Transitions *TransitionsConfig `json:"transitions,omitempty"`
 }
 
 // EthashConfig is the consensus engine configs for proof-of-work based sealing.
@@ -351,6 +353,15 @@ type CliqueConfig struct {
 // String implements the stringer interface, returning the consensus engine details.
 func (c *CliqueConfig) String() string {
 	return "clique"
+}
+
+type TransitionsConfig struct {
+	CliqueTransition []CliqueTransitionConfig `json:"clique,omitempty"`
+}
+
+type CliqueTransitionConfig struct {
+	Block              uint64 `json:"block,omitempty"`
+	BlockPeriodSeconds uint64 `json:"blockperiodseconds,omitempty"`
 }
 
 // Description returns a human-readable description of ChainConfig.
