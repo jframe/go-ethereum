@@ -19,6 +19,7 @@ package eth
 import (
 	"errors"
 	"fmt"
+	"github.com/ethereum/go-ethereum/log"
 	"math/big"
 	"time"
 
@@ -81,8 +82,10 @@ func (p *Peer) Handshake(network uint64, td *big.Int, head common.Hash, genesis 
 
 // readStatus reads the remote handshake message.
 func (p *Peer) readStatus(network uint64, status *StatusPacket, genesis common.Hash, forkFilter forkid.Filter) error {
+	log.Debug("Reading status message")
 	msg, err := p.rw.ReadMsg()
 	if err != nil {
+		log.Debug("Failed to read status message", "err", err)
 		return err
 	}
 	if msg.Code != StatusMsg {
